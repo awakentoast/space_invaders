@@ -1,0 +1,2 @@
+// #[derive(Component)]
+// #[requite(Sprite)]
