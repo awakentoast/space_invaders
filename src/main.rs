@@ -1,15 +1,14 @@
 mod alien;
 mod bullet;
-mod misc;
 mod spaceship;
 
+use crate::alien::{Alien, AlienPlugin, HEIGHT_BLOCK, HEIGHT_SPRITES, WIDTH_SPRITES};
+use crate::bullet::{collide, BulletPlugin};
+use crate::spaceship::{Spaceship, SpaceshipPlugin};
+use bevy::math::bounding::Aabb2d;
+use bevy::math::vec2;
 use bevy::prelude::*;
-use bevy::time::Stopwatch;
 use bevy::window::{Window, WindowMode, WindowResolution};
-
-use alien::*;
-use misc::*;
-use spaceship::*;
 
 fn main() {
     App::new()
@@ -23,17 +22,11 @@ fn main() {
             }),
             ..default()
         }))
-        .add_systems(
-            Startup,
-            (
-                make_window_visible,
-                setup_aliens,
-                setup_camera,
-                setup_spaceship,
-            ),
-        )
-        .add_systems(Update, (close_game, move_aliens, input_spaceship))
-        .insert_resource(RowIndex { row: 0 })
+        .add_systems(Startup, setup_camera)
+        .add_systems(Update, (make_window_visible, close_game, game_over, win))
+        .add_plugins(AlienPlugin)
+        .add_plugins(SpaceshipPlugin)
+        .add_plugins(BulletPlugin)
         .run();
 }
 
@@ -47,6 +40,12 @@ fn close_game(
 ) {
     if keys.just_pressed(KeyCode::Escape) {
         app_exit_events.send(AppExit::Success);
+    }
+}
+
+fn win(aliens: Query<&Alien>) {
+    if aliens.is_empty() {
+        println!("YOU WIN");
     }
 }
 
@@ -66,50 +65,23 @@ fn setup_camera(mut commands: Commands, window: Single<&mut Window>) {
     ));
 }
 
-fn setup_aliens(mut commands: Commands, asset_server: Res<AssetServer>) {
-    let alien = Sprite {
-        image: asset_server.load("alien.png"),
-        ..default()
-    };
-
-    for y in 0..2 {
-        for x in 0..11 {
-            commands.spawn((
-                alien.clone(),
-                Transform::from_xyz(
-                    x as f32 * WIDTH_BLOCK + PADDING_HORIZONTAL + WIDTH_SPRITES / 2.,
-                    y as f32 * HEIGHT_BLOCK - PADDING_VERTICAL - HEIGHT_SPRITES / 2.,
-                    1.,
-                ),
-                Alien,
-                Row { row: y },
-            ));
+fn game_over(
+    spaceship: Query<&Transform, (With<Spaceship>, Without<Alien>)>,
+    aliens: Query<&Transform, (With<Alien>, Without<Spaceship>)>,
+) {
+    let spaceship = spaceship.get_single().expect("there should be a spaceship");
+    for alien_center in &aliens {
+        if collide(
+            Aabb2d::new(
+                vec2(alien_center.translation.x, alien_center.translation.y),
+                vec2(WIDTH_SPRITES / 2., HEIGHT_SPRITES / 2.),
+            ),
+            Aabb2d::new(
+                vec2(spaceship.translation.x, spaceship.translation.y),
+                vec2(WIDTH_SPRITES / 2., HEIGHT_SPRITES / 2.),
+            ),
+        ) {
+            println!("you lose");
         }
     }
-}
-
-fn setup_spaceship(mut commands: Commands, asset_server: Res<AssetServer>) {
-    let spaceship = Sprite {
-        image: asset_server.load("spaceship.png"),
-        ..default()
-    };
-
-    println!("aaa");
-    commands.spawn((
-        spaceship,
-        Transform::from_xyz(
-            1920. / 2. - WIDTH_BLOCK / 2.,
-            -1080. + HEIGHT_BLOCK * 1.5,
-            1.,
-        ),
-        Spaceship,
-        MovementCooldown {
-            button: KeyCode::ArrowLeft,
-            stopwatch: Stopwatch::new(),
-        },
-        MovementCooldown {
-            button: KeyCode::ArrowLeft,
-            stopwatch: Stopwatch::new(),
-        },
-    ));
 }
